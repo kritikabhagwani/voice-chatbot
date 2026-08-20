@@ -1,0 +1,19 @@
+Our company provides web development courses.
+
+The MERN Stack course teaches MongoDB, Express.js, React.js and Node.js.
+
+The DSA course covers arrays, strings, linked lists, stacks, queues, trees, graphs, sorting and searching algorithms.
+
+Students can contact support from Monday to Friday between 9 AM and 6 PM.
+
+The web development course includes HTML, CSS, JavaScript, React and backend development.
+
+Course certificates are provided after successful completion of the course.
+
+Students can access course materials through their registered account.
+
+The standard course duration is 6 months.
+
+Students can ask technical questions through the community section.
+
+The refund policy allows students to request a refund within 30 days of purchasing a course.
