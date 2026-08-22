@@ -138,6 +138,20 @@ button {
   align-items: center;
   gap: 12px;
 }
+.signin-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100vw;
+  background: var(--bg-dark);
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
 
 .brand-orb {
   width: 42px;

@@ -1,127 +1,173 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { SignedIn, SignedOut, SignIn, UserButton, useAuth } from "@clerk/clerk-react";
 import VoiceButton from "./components/VoiceButton";
 import ChatBox from "./components/ChatBox";
+import Sidebar from "./components/Sidebar";
 import "./App.css";
 
 function App() {
+  const { getToken, isSignedIn } = useAuth();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [chats, setChats] = useState([]);
+  const [currentChatId, setCurrentChatId] = useState(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [limitReached, setLimitReached] = useState(false);
 
- const speakResponse = (text) => {
-  if (!window.speechSynthesis) return;
+  useEffect(() => {
+    if (isSignedIn) {
+      fetchChats();
+    }
+  }, [isSignedIn]);
 
-  window.speechSynthesis.cancel();
-
-  const utterance = new SpeechSynthesisUtterance(text);
-
-  utterance.lang = "en-IN";
-  utterance.rate = 0.95;
-  utterance.pitch = 1;
-  utterance.volume = 1;
-
-  utterance.onstart = () => {
-    setSpeaking(true);
-  };
-
-  utterance.onend = () => {
-    setSpeaking(false);
-  };
-
-  utterance.onerror = () => {
-    setSpeaking(false);
-  };
-
-  window.speechSynthesis.speak(utterance);
-};
-
-const sendMessage = async (text) => {
-  if (!text.trim() || loading) return;
-
-  setMessages((prev) => [
-    ...prev,
-    {
-      sender: "user",
-      text,
-    },
-  ]);
-
-  setLoading(true);
-
-  try {
-    const response = await axios.post(
-      "http://localhost:5000/api/chat",
-      {
-        message: text,
+  const fetchChats = async () => {
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const response = await axios.get("http://localhost:5000/api/chat", {
+        headers: { Authorization: \`Bearer \${token}\` }
+      });
+      if (response.data.success) {
+        setChats(response.data.chats);
       }
-    );
+    } catch (error) {
+      console.error("Error fetching chats:", error);
+    }
+  };
 
-    console.log("FULL BACKEND RESPONSE:", response.data);
+  const loadChat = async (chatId) => {
+    try {
+      setLoading(true);
+      const token = await getToken();
+      const response = await axios.get(\`http://localhost:5000/api/chat/\${chatId}\`, {
+        headers: { Authorization: \`Bearer \${token}\` }
+      });
+      if (response.data.success) {
+        setMessages(response.data.messages);
+        setCurrentChatId(chatId);
+        setIsSidebarOpen(false);
+        setLimitReached(response.data.chat.messageCount >= 80);
+      }
+    } catch (error) {
+      console.error("Error loading chat:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const reply =
-      response.data.answer ||
-      response.data.response ||
-      response.data.message ||
-      "I could not generate a response.";
+  const startNewChat = () => {
+    setMessages([]);
+    setCurrentChatId(null);
+    setLimitReached(false);
+    setIsSidebarOpen(false);
+  };
 
-    // Display AI response
-    setMessages((prev) => [
-      ...prev,
-      {
-        sender: "ai",
-        text: reply,
-      },
-    ]);
+  const speakResponse = (text) => {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-IN";
+    utterance.rate = 0.95;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+    utterance.onstart = () => setSpeaking(true);
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+  };
 
-    // 🔊 Speak AI response
-    speakResponse(reply);
+  const sendMessage = async (text) => {
+    if (!text.trim() || loading || limitReached) return;
 
-  } catch (error) {
-    console.error("Chat error:", error);
+    setMessages((prev) => [...prev, { sender: "user", text }]);
+    setLoading(true);
 
-    setMessages((prev) => [
-      ...prev,
-      {
-        sender: "ai",
-        text: "Sorry, something went wrong.",
-      },
-    ]);
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      const token = await getToken();
+      const response = await axios.post("http://localhost:5000/api/chat", {
+        message: text,
+        chatId: currentChatId,
+      }, {
+        headers: { Authorization: \`Bearer \${token}\` }
+      });
 
+      console.log("FULL BACKEND RESPONSE:", response.data);
+
+      if (response.data.limitReached) {
+         setLimitReached(true);
+      }
+
+      const reply = response.data.answer || "I could not generate a response.";
+
+      setMessages((prev) => [...prev, { sender: "ai", text: reply }]);
+      speakResponse(reply);
+
+      if (!currentChatId) {
+        setCurrentChatId(response.data.chatId);
+        fetchChats(); // Refresh list to show new chat
+      }
+    } catch (error) {
+      console.error("Chat error:", error);
+      if (error.response && error.response.data.limitReached) {
+        setLimitReached(true);
+        setMessages((prev) => [...prev, { sender: "ai", text: "Chat limit reached. Please start a new chat." }]);
+      } else {
+        setMessages((prev) => [...prev, { sender: "ai", text: "Sorry, something went wrong." }]);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="app">
-      {/* Background effects */}
-      <div className="background-glow glow-one"></div>
-      <div className="background-glow glow-two"></div>
-      <div className="background-glow glow-three"></div>
+      <SignedOut>
+        <div className="signin-container">
+          <SignIn />
+        </div>
+      </SignedOut>
+      <SignedIn>
+        <Sidebar 
+          chats={chats}
+          currentChatId={currentChatId}
+          onSelectChat={loadChat}
+          onNewChat={startNewChat}
+          isOpen={isSidebarOpen}
+          toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+        />
 
-      <div className="noise"></div>
+        {/* Background effects */}
+        <div className="background-glow glow-one"></div>
+        <div className="background-glow glow-two"></div>
+        <div className="background-glow glow-three"></div>
 
-      {/* Main container */}
-      <main className="chat-app">
+        <div className="noise"></div>
 
-        {/* Header */}
-        <header className="topbar">
-          <div className="brand">
-            <div className="brand-orb">
-              <div className="mini-spark">✦</div>
+        {/* Main container */}
+        <main className="chat-app">
+
+          {/* Header */}
+          <header className="topbar">
+            <div className="brand">
+              <div className="brand-orb">
+                <div className="mini-spark">✦</div>
+              </div>
+
+              <div>
+                <h2>AskAI</h2>
+                <span>AI Assistant</span>
+              </div>
             </div>
 
-            <div>
-              <h2>AskAI</h2>
-              <span>AI Assistant</span>
+            <div className="topbar-actions">
+              <UserButton />
+              <button className="settings-btn" onClick={() => setIsSidebarOpen(true)}>
+                <span>⋮</span>
+              </button>
             </div>
-          </div>
-
-          <button className="settings-btn">
-            <span>⋮</span>
-          </button>
-        </header>
+          </header>
 
         {/* Welcome section */}
         {messages.length === 0 && (
@@ -247,11 +293,13 @@ const sendMessage = async (text) => {
 
           <VoiceButton
             onTextReceived={sendMessage}
-            disabled={loading}
+            disabled={loading || limitReached}
           />
 
           <p className="voice-hint">
-            {loading
+            {limitReached 
+              ? "Chat limit reached. Start a new chat."
+              : loading
               ? "Processing your question..."
               : "Tap the microphone and speak"}
           </p>
@@ -259,7 +307,7 @@ const sendMessage = async (text) => {
 
         {/* Bottom */}
         <footer className="footer">
-          <span>Powered by RAG</span>
+          <span>Powered by RAG & Vector Memory</span>
 
           <div className="status">
             <span className="status-dot"></span>
@@ -268,6 +316,7 @@ const sendMessage = async (text) => {
         </footer>
 
       </main>
+      </SignedIn>
     </div>
   );
 }
