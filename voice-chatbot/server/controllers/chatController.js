@@ -1,3 +1,4 @@
+//used ollama
 const { hybridSearch } = require("../services/vectorService");
 const { default: ollama } = require("ollama");
 const ChatMeta = require("../models/ChatMeta");
