@@ -5,6 +5,10 @@ const dotenv = require("dotenv");
 dotenv.config();
 
 const chatRoutes = require("./routes/chatRoutes");
+const connectDB = require("./config/db");
+
+// Connect to MongoDB
+connectDB();
 
 const app = express();
 
@@ -20,6 +24,13 @@ app.get("/", (req, res) => {
 
 app.use("/api/chat", chatRoutes);
 
+app.use((err, req, res, next) => {
+  if (err.message === 'Unauthenticated' || err.status === 401) {
+    return res.status(401).json({ success: false, message: 'Unauthenticated' });
+  }
+  console.error(err.stack);
+  res.status(500).json({ success: false, message: 'Internal Server Error' });
+});
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
