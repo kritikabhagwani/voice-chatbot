@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 
+const { clerkMiddleware } = require("@clerk/express");
 dotenv.config();
 
 const chatRoutes = require("./routes/chatRoutes");
@@ -14,6 +15,28 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+
+app.use((req, res, next) => {
+  console.log(
+    "AUTHORIZATION HEADER:",
+    req.headers.authorization
+      ? "Bearer token received"
+      : "NO AUTHORIZATION HEADER"
+  );
+  
+  next();
+});
+
+app.use(clerkMiddleware());
+
+app.use((req, res, next) => {
+  console.log("========== CLERK DEBUG ==========");
+  console.log("Authorization Header:", req.headers.authorization ? "PRESENT" : "MISSING");
+  console.log("User ID:", req.auth?.userId || "NOT AUTHENTICATED");
+  next();
+});
+
 
 app.get("/", (req, res) => {
   res.json({
